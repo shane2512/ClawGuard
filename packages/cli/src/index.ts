@@ -131,7 +131,7 @@ program
 
 program
   .command('inspect <skill-id>')
-  .description('Inspect a skill via ENS → 0G Storage KV (ENS name or skill ID)')
+  .description('Inspect a skill via ENS → 0G File Storage (resolves root hash from ENS)')
   .option('--no-ens', 'Skip ENS lookup — go directly to 0G KV')
   .option('--check-tool <tool>', 'Check if a specific tool is allowed (delegation gate)')
   .action(async (skillId: string, opts: { ens?: boolean; checkTool?: string }) => {
@@ -172,16 +172,20 @@ program
         }
       }
 
-      // ── Step 2: Fetch manifest from 0G Storage KV ─────────────────────────
-      console.log(c.dim('  Fetching manifest from 0G Storage KV...'));
+      // ── Step 2: Fetch manifest from 0G File Storage ──────────────────────
+      console.log(c.dim('  Fetching manifest from 0G Storage...'));
       const storage = createStorageClientFromEnv();
 
-      // Use ENS-resolved storageKey (strips skill: prefix if needed) or raw skillId
-      const fetchId = storageKey
-        ? storageKey.replace('skill:', '').replace(':manifest', '')
-        : skillId;
+      // storageKey from ENS is now a 0x root hash (file-based storage)
+      // If no ENS record found, we cannot fetch without a root hash
+      if (!storageKey) {
+        throw new Error(
+          `Cannot fetch manifest for "${skillId}" — no ENS record found.\n` +
+          `  Ensure the skill has been published and ENS is configured.`,
+        );
+      }
 
-      const manifest = await storage.fetchManifest(fetchId);
+      const manifest = await storage.fetchManifest(storageKey, ensRecord?.manifestHash ?? undefined);
 
       // ── Step 3: Display manifest ───────────────────────────────────────────
       console.log(c.bold('\n  Capability Manifest:'));
