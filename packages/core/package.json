@@ -1,6 +1,6 @@
 {
-  "name": "@clawguard/core",
-  "version": "0.1.0",
+  "name": "@shanejoans/clawguard",
+  "version": "0.1.1",
   "description": "ClawGuard — OAuth-style capability enforcement middleware for AI agents on 0G Chain",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -46,7 +46,7 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/shane2512/ClawGuard.git",
+    "url": "git+https://github.com/shane2512/ClawGuard.git",
     "directory": "packages/core"
   },
   "homepage": "https://github.com/shane2512/ClawGuard#readme",
