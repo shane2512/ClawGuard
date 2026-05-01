@@ -1,9 +1,13 @@
 /**
  * Phase 2.4: 0G Compute Sealed Inference — Skill Capability Verification
  *
- * Uses @0gfoundation/0g-compute-ts-sdk (createInferenceBroker)
+ * Uses @0gfoundation/0g-compute-ts-sdk (createZGComputeNetworkBroker v0.7+)
  * to send skill source code to a TEE-backed AI model and extract
  * the actual tools it invokes. Compares against declared [CAPABILITIES].
+ *
+ * SDK v0.7+ component API:
+ *   broker.inference  — InferenceBroker (listService, request)
+ *   broker.ledger     — LedgerBroker (account management)
  *
  * Verification result is then written to SkillRegistry.sol on-chain.
  */
@@ -39,11 +43,7 @@ ${skillCode}`;
 
 /**
  * Verifies a skill's source code against its declared capabilities
- * using 0G Compute sealed inference.
- *
- * @param skillCode - Full source code of the skill to analyze
- * @param manifest  - The skill's declared CapabilityManifest
- * @returns VerificationResult with VERIFIED or CAPABILITY_MISMATCH status
+ * using 0G Compute sealed inference (SDK v0.7+ component API).
  */
 export async function verifySkillWithCompute(
   skillCode: string,
@@ -60,16 +60,16 @@ export async function verifySkillWithCompute(
   const signer = new ethers.Wallet(privateKey, provider);
 
   // eslint-disable-next-line @typescript-eslint/no-var-requires
-  const { createInferenceBroker, CONTRACT_ADDRESSES } = require('@0gfoundation/0g-compute-ts-sdk');
-  const inferenceAddr = CONTRACT_ADDRESSES.testnet.inference;
-  const ledgerAddr = CONTRACT_ADDRESSES.testnet.ledger;
+  const { createZGComputeNetworkBroker } = require('@0gfoundation/0g-compute-ts-sdk');
 
   console.log('[0G Compute] Initializing inference broker...');
-  const broker = await createInferenceBroker(signer, inferenceAddr, ledgerAddr);
+  // SDK v0.7+: returns { inference, ledger, fineTuning }
+  const broker = await createZGComputeNetworkBroker(signer);
+  const inferenceBroker = broker.inference;
 
-  // List available providers — listService() is on broker directly
+  // List available providers
   console.log('[0G Compute] Fetching available inference services...');
-  const services = await broker.listService();
+  const services = await inferenceBroker.listService();
 
   if (!services || services.length === 0) {
     throw new Error('No inference providers available on 0G Compute network.');
@@ -85,20 +85,27 @@ export async function verifySkillWithCompute(
   const providerAddress: string = service.provider;
   console.log(`[0G Compute] Using provider: ${providerAddress} | Model: ${service.model}`);
 
-  // Ensure provider sub-account exists
+  // Ensure ledger account exists for this provider (required by 0G Compute protocol)
   try {
-    await broker.getAccount(providerAddress);
-  } catch {
-    console.log('[0G Compute] No sub-account found. Creating and funding...');
-    await broker.depositFund(providerAddress, ethers.parseEther('0.001'));
+    const ledger = broker.ledger;
+    if (ledger && typeof ledger.addAccount === 'function') {
+      console.log('[0G Compute] Setting up ledger sub-account...');
+      await ledger.addAccount(providerAddress, ethers.parseEther('0.001'));
+      console.log('[0G Compute] Sub-account ready.');
+    } else if (ledger && typeof ledger.transferFund === 'function') {
+      await ledger.transferFund(providerAddress, ethers.parseEther('0.001'));
+    }
+  } catch (acctErr) {
+    // Non-fatal: account may already exist, or provider may not need pre-funding
+    console.log(`[0G Compute] Account setup: ${String(acctErr).slice(0, 80)} (continuing...)`);
   }
 
   // Build prompt and get request headers
   const prompt = buildVerificationPrompt(skillCode);
-  const headers = await broker.getRequestHeaders(providerAddress, prompt);
+  const headers = await inferenceBroker.getRequestHeaders(providerAddress, prompt);
 
   // Get service endpoint
-  const { endpoint, model } = await broker.getServiceMetadata(providerAddress);
+  const { endpoint, model } = await inferenceBroker.getServiceMetadata(providerAddress);
 
   // Make the inference request
   console.log('[0G Compute] Sending skill code for sealed inference analysis...');
@@ -124,9 +131,9 @@ export async function verifySkillWithCompute(
 
   // Process response for fee settlement (required by broker protocol)
   try {
-    await broker.inference.processResponse(providerAddress, data, prompt);
+    await inferenceBroker.processResponse(providerAddress, data, prompt);
   } catch (err) {
-    console.warn('[0G Compute] Fee settlement warning:', err);
+    console.warn('[0G Compute] Fee settlement warning (non-fatal):', String(err).slice(0, 80));
   }
 
   // Parse AI response
@@ -134,13 +141,11 @@ export async function verifySkillWithCompute(
   let invokedTools: string[] = [];
 
   try {
-    // Strip markdown fences if present
     const cleaned = rawContent.replace(/```json?\n?/g, '').replace(/```/g, '').trim();
     const parsed = JSON.parse(cleaned) as { invokedTools?: string[] };
     invokedTools = parsed.invokedTools ?? [];
   } catch {
     console.warn('[0G Compute] Failed to parse JSON response, trying regex extraction...');
-    // Fallback: extract tool names via regex
     const matches = rawContent.match(/"[\w.]+"/g) ?? [];
     invokedTools = matches.map((m: string) => m.replace(/"/g, ''));
   }
