@@ -1,0 +1,11 @@
+{
+  "16602": {
+    "network": "zgTestnet",
+    "chainId": "16602",
+    "SkillRegistry": {
+      "address": "0x2205AC38725F42d9da0ffaDD94166B5E5b83010A",
+      "txHash": "0x16210575720c4f8a26089b269abcce95defc8e6e005914dc280eca740498aa4b",
+      "deployedAt": "2026-05-01T09:30:32.905Z"
+    }
+  }
+}
