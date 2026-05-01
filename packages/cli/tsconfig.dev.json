@@ -1,0 +1,10 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "baseUrl": ".",
+    "paths": {
+      "@clawguard/core": ["../core/src/index.ts"],
+      "@clawguard/core/*": ["../core/src/*"]
+    }
+  }
+}

@@ -241,18 +241,15 @@ async function fetchManifest(
     }
   }
 
-  // 3. 0G Storage KV fetch (Phase 2)
-  if (state.config.zgStorageRpc) {
-    // Lazy-import to avoid circular dependency in tests
+  // 3. 0G Storage fetch (Phase 2) — rootHash must be in config or resolved via ENS
+  if (state.config.zgStorageRpc && state.config.zgManifestRootHash) {
     const { ZGStorageClient } = await import('./storage');
     const storageClient = new ZGStorageClient({
       rpcUrl: state.config.zgStorageRpc,
       indexerRpc: state.config.zgIndexerRpc ?? state.config.zgStorageRpc,
-      kvNodeRpc: state.config.zgKvNodeRpc ?? 'http://3.101.147.150:6789',
       privateKey: state.config.zgPrivateKey ?? '',
-      streamId: state.config.zgStreamId,
     });
-    const manifest = await storageClient.fetchManifest(skillId, state.config.registryAddress ? undefined : undefined);
+    const manifest = await storageClient.fetchManifest(state.config.zgManifestRootHash);
     state.cache.set(skillId, manifest);
     return manifest;
   }

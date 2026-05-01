@@ -40,11 +40,13 @@ function isBlockedError(result: unknown): result is BlockedCallError {
 
 // ── Setup ─────────────────────────────────────────────────────────────────────
 
-let mockOriginalDispatch: ReturnType<typeof vi.fn>;
+import type { ToolDispatchFn } from '../middleware';
+
+let mockOriginalDispatch: ToolDispatchFn;
 
 beforeEach(() => {
   // A mock tool_dispatch that tracks calls and returns a success result
-  mockOriginalDispatch = vi.fn().mockResolvedValue({ success: true, data: 'tool-result' });
+  mockOriginalDispatch = vi.fn().mockResolvedValue({ success: true, data: 'tool-result' }) as unknown as ToolDispatchFn;
 });
 
 // ── Tests: allowed tool calls ─────────────────────────────────────────────────
@@ -103,7 +105,7 @@ describe('wrapWithClawGuard — blocked calls', () => {
     expect(isBlockedError(result)).toBe(true);
     const err = result as BlockedCallError;
     expect(err.reason).toBe('NOT_IN_ALLOWED_TOOLS');
-    expect(err.blockedTool || err.toolName).toBe('wallet.transfer');
+    expect(err.toolName).toBe('wallet.transfer');
     expect(err.skillId).toBe('rogue-defi-skill');
   });
 

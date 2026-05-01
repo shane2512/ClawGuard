@@ -79,17 +79,19 @@ export const ClawGuardConfigSchema = z.object({
   registryAddress: z.string().optional(),
   /**
    * 0G Storage RPC endpoint (Phase 2+).
-   * When set, cache misses fetch from 0G Storage KV.
+   * When set with zgManifestRootHash, manifests are fetched from 0G Storage.
    */
   zgStorageRpc: z.string().optional(),
   /** 0G Storage indexer RPC (defaults to zgStorageRpc if not set) */
   zgIndexerRpc: z.string().optional(),
-  /** 0G KV node HTTP endpoint for reads (default: http://3.101.147.150:6789) */
-  zgKvNodeRpc: z.string().optional(),
   /** Wallet private key for 0G Storage write operations */
   zgPrivateKey: z.string().optional(),
-  /** Stream ID hex for KV bucket (uses ClawGuard default if not set) */
-  zgStreamId: z.string().optional(),
+  /**
+   * 0G Storage file root hash for the skill manifest.
+   * Obtained from ENS clawguard.storageKey text record after publishing.
+   * Format: 0x-prefixed 32-byte hex string.
+   */
+  zgManifestRootHash: z.string().optional(),
   /**
    * Local manifest store override (key = skillId, value = manifest).
    * Used in Phase 1 for local testing without 0G Storage.

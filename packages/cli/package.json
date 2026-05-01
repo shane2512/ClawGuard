@@ -8,17 +8,17 @@
     "clawguard": "./dist/index.js"
   },
   "scripts": {
-    "build": "tsc",
-    "dev": "ts-node -r tsconfig-paths/register --transpile-only src/index.ts",
+    "build": "tsc --build",
+    "dev": "ts-node -r tsconfig-paths/register --project tsconfig.dev.json --transpile-only src/index.ts",
     "clean": "rimraf dist",
-    "cli": "ts-node -r tsconfig-paths/register --transpile-only src/index.ts",
-    "publish:skill": "ts-node -r tsconfig-paths/register --transpile-only src/index.ts publish",
-    "verify:skill": "ts-node -r tsconfig-paths/register --transpile-only src/index.ts verify",
-    "inspect": "ts-node -r tsconfig-paths/register --transpile-only src/index.ts inspect",
-    "ens:bootstrap": "ts-node -r tsconfig-paths/register --transpile-only ../../packages/contracts/src/ENSRegistrar.ts bootstrap",
-    "ens:register": "ts-node -r tsconfig-paths/register --transpile-only ../../packages/contracts/src/ENSRegistrar.ts register",
-    "ens:resolve": "ts-node -r tsconfig-paths/register --transpile-only ../../packages/contracts/src/ENSRegistrar.ts resolve",
-    "ens:revoke": "ts-node -r tsconfig-paths/register --transpile-only ../../packages/contracts/src/ENSRegistrar.ts revoke"
+    "cli": "ts-node -r tsconfig-paths/register --project tsconfig.dev.json --transpile-only src/index.ts",
+    "publish:skill": "ts-node -r tsconfig-paths/register --project tsconfig.dev.json --transpile-only src/index.ts publish",
+    "verify:skill": "ts-node -r tsconfig-paths/register --project tsconfig.dev.json --transpile-only src/index.ts verify",
+    "inspect": "ts-node -r tsconfig-paths/register --project tsconfig.dev.json --transpile-only src/index.ts inspect",
+    "ens:bootstrap": "ts-node -r tsconfig-paths/register --project tsconfig.dev.json --transpile-only ../../packages/contracts/src/ENSRegistrar.ts bootstrap",
+    "ens:register": "ts-node -r tsconfig-paths/register --project tsconfig.dev.json --transpile-only ../../packages/contracts/src/ENSRegistrar.ts register",
+    "ens:resolve": "ts-node -r tsconfig-paths/register --project tsconfig.dev.json --transpile-only ../../packages/contracts/src/ENSRegistrar.ts resolve",
+    "ens:revoke": "ts-node -r tsconfig-paths/register --project tsconfig.dev.json --transpile-only ../../packages/contracts/src/ENSRegistrar.ts revoke"
   },
   "dependencies": {
     "@0gfoundation/0g-ts-sdk": "^1.2.8",

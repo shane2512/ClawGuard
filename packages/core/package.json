@@ -1,11 +1,15 @@
 {
   "name": "@clawguard/core",
   "version": "0.1.0",
-  "description": "ClawGuard middleware — OAuth-style capability enforcement for OpenClaw skills",
+  "description": "ClawGuard — OAuth-style capability enforcement middleware for AI agents on 0G Chain",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
+  "files": [
+    "dist",
+    "README.md"
+  ],
   "scripts": {
-    "build": "tsc",
+    "build": "tsc --build",
     "test": "vitest run",
     "test:watch": "vitest",
     "lint": "tsc --noEmit",
@@ -28,15 +32,28 @@
     "typescript": "^5.0.0",
     "vitest": "^1.6.0"
   },
-  "files": [
-    "dist"
-  ],
   "keywords": [
+    "clawguard",
     "openclaw",
-    "capability",
-    "security",
+    "ai-agent",
+    "capability-enforcement",
     "web3",
-    "agent"
+    "0g-storage",
+    "ens",
+    "middleware"
   ],
-  "license": "MIT"
+  "author": "ClawGuard Contributors",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/shane2512/ClawGuard.git",
+    "directory": "packages/core"
+  },
+  "homepage": "https://github.com/shane2512/ClawGuard#readme",
+  "bugs": {
+    "url": "https://github.com/shane2512/ClawGuard/issues"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  }
 }
