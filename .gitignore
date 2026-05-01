@@ -1,15 +1,37 @@
+# Dependencies
 node_modules/
+
+# Build output
 dist/
 build/
+out/
+
+# Environment secrets
 .env
 *.env.local
+
+# Logs
 *.log
+npm-debug.log*
+
+# OS
 .DS_Store
 Thumbs.db
+
+# TypeScript
 *.tsbuildinfo
+
+# Test coverage
 coverage/
 .nyc_output/
-out/
+
+# Hardhat / Foundry
 cache/
 artifacts/
 broadcast/
+
+# Test dirs
+clawguard-test/
+
+# npm pack output
+*.tgz
