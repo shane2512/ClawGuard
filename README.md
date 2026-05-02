@@ -3,10 +3,12 @@
 > **Layer 2.5 Security Middleware for OpenClaw Agents**  
 > Declarative capability enforcement · Tamper-proof audit logs · On-chain manifest registry · ENS skill discovery
 
+[![npm](https://img.shields.io/badge/npm-%40shanejoans%2Fclawguard-red)](https://www.npmjs.com/package/@shanejoans/clawguard)
 [![0G Chain](https://img.shields.io/badge/0G%20Chain-Galileo%20Testnet-blue)](https://chainscan-galileo.0g.ai)
 [![SkillRegistry](https://img.shields.io/badge/SkillRegistry-0x2205AC...010A-green)](https://chainscan-galileo.0g.ai/address/0x2205AC38725F42d9da0ffaDD94166B5E5b83010A)
 [![ENS](https://img.shields.io/badge/ENS-clawhub.eth-purple)](https://app.ens.domains/clawhub.eth)
 [![Tests](https://img.shields.io/badge/Tests-39%20passed-brightgreen)](#testing)
+
 
 ---
 
@@ -18,20 +20,19 @@ ClawGuard is a **middleware security layer** that wraps any OpenClaw agent's `to
 OpenClaw Agent
      │
      ▼ tool_dispatch(tool, params)
-┌────────────────────────────────────────┐
-│           ClawGuard Middleware          │
-│                                        │
-│  ① Resolve manifest  ←── ENS subname  │
-│      (skills.clawhub.eth)              │
-│  ② Fetch from 0G Storage KV           │
-│  ③ Verify hash (Rule S-03)            │
-│  ④ Enforce allow/block lists          │
-│  ⑤ Log violations → 0G Storage Log   │
-└────────────────────────────────────────┘
+┌────────────────────────────────────────────┐
+│           ClawGuard Middleware (L2.5)        │
+│                                            │
+│  ① Resolve ENS name → clawguard.storageKey │
+│  ② Fetch manifest ← 0G File Storage REST  │
+│  ③ Verify SHA-256 hash (Rule S-03)        │
+│  ④ Enforce allow/block lists              │
+│  ⑤ Violations → 0G Storage Log           │
+└────────────────────────────────────────────┘
      │ ✅ allowed                 │ 🚫 blocked
      ▼                            ▼
   Actual tool            ViolationEvent
-  execution               (immutable)
+  execution               (immutable, on 0G)
 ```
 
 ---
@@ -127,33 +128,35 @@ npx ts-node packages/cli/src/index.ts inspect --skill defi-reader
 ## Using the Middleware
 
 ```typescript
-import { wrapWithClawGuard } from '@clawguard/core';
+import { wrapWithClawGuard, addViolationHandler, createViolationAuditHandler } from '@shanejoans/clawguard';
 
-// Your OpenClaw agent's tool dispatch function
+// Wrap your OpenClaw agent's tool_dispatch (3 lines — NFR-08)
 const dispatch = wrapWithClawGuard(myAgent.tool_dispatch, {
-  // Option A: load from 0G Storage (production)
-  zgStorageRpc: process.env.ZG_INDEXER_RPC,
-  zgPrivateKey: process.env.ZG_PRIVATE_KEY,
+  agentId: 'defi-monitor-agent',
 
-  // Option B: local manifest store (development)
-  localManifestStore: {
-    'defi-reader': myManifest,
-  },
+  // Load manifest locally (dev) or from ENS+0G (production)
+  localManifestStore: { 'defi-reader': myManifest },
+  // — OR —
+  ensName: 'defi-reader.skills.clawhub.eth', // auto-resolves ENS → 0G hash
 
-  // Fail-closed by default (blocks on manifest fetch failure)
-  failOpen: false,
+  // Auto-upload violations to 0G Storage Log
+  auditLog: true,
+  zgStorageRpc:  process.env.ZG_CHAIN_RPC,
+  zgIndexerRpc:  process.env.ZG_INDEXER_RPC,
+  zgPrivateKey:  process.env.ZG_PRIVATE_KEY,
 
-  // Violation handler — e.g. alert to Slack, store in DB
-  onViolation: async (event) => {
-    console.error('[SECURITY]', event.blockedTool, 'blocked for', event.skillId);
-  },
+  failOpen: false, // fail-closed — block on any manifest fetch failure
 });
 
-// Every tool call now goes through ClawGuard
-const result = await dispatch({
-  tool: 'wallet.read_balance',
-  params: { address: '0x...' },
-  context: { skillId: 'defi-reader', sessionId: 'abc123' },
+// Optional: add extra violation handlers (Slack, DB, etc.)
+addViolationHandler(dispatch, (event) => {
+  console.error('[SECURITY]', event.blockedTool, 'blocked for', event.skillId);
+});
+
+// Every call now goes through ClawGuard
+const result = await dispatch('wallet.read_balance', { address: '0x...' }, {
+  skillId: 'defi-reader',
+  sessionId: 'session-abc123',
 });
 ```
 
@@ -201,12 +204,12 @@ Each ENS subname stores these text records:
 
 | Key | Value | Purpose |
 |-----|-------|---------|
-| `clawguard.storageKey` | `skill:defi-reader:manifest` | 0G KV lookup key |
-| `clawguard.manifestHash` | `0xabc...` | SHA-256 integrity anchor |
+| `clawguard.storageKey` | `0xdd242a...` | 0G File Storage root hash (content ID) |
+| `clawguard.manifestHash` | `0x3f5299...` | SHA-256 integrity anchor |
 | `clawguard.registryAddr` | `0x2205AC...` | SkillRegistry contract |
-| `clawguard.status` | `ACTIVE` \| `REVOKED` | Revocation status |
-| `description` | Human-readable text | Discovery |
-| `url` | Documentation link | Discovery |
+| `clawguard.status` | `ACTIVE` \| `REVOKED` | Revocation gate |
+| `description` | Human-readable text | Agent discovery |
+| `url` | Documentation link | Agent discovery |
 
 ---
 
@@ -220,7 +223,7 @@ Each ENS subname stores these text records:
 **0G Storage:**
 - Flow Contract: `0x22E03a6A89B950F1c82ec5e74F8eCa321a105296`
 - Turbo Indexer: `https://indexer-storage-testnet-turbo.0g.ai`
-- KV Discovery: Automatic (probes all storage nodes on port 6789)
+- Strategy: **File Storage** (content-addressed by Merkle root hash, open read/write)
 
 **0G Compute:**
 - Inference Contract: `0xa79F4c8311FF93C06b8CfB403690cc987c93F91E`
@@ -235,8 +238,22 @@ Each ENS subname stores these text records:
 | **S-01** | Fail-closed by default — blocks all calls if manifest cannot be fetched |
 | **S-02** | Violation events never include raw tool parameters (no key/secret leakage) |
 | **S-03** | Manifest integrity verified via SHA-256 hash comparison at every fetch |
-| **S-04** | KV node discovered dynamically — never relies on a single hardcoded endpoint |
+| **S-04** | ENS storageKey is a content-addressable hash — cannot be silently swapped |
 | **S-05** | ENS subname revocation sets `REVOKED` status; middleware rejects revoked skills |
+
+---
+
+## Why 0G File Storage instead of KV
+
+The original spec called for 0G Storage **KV** (key-value store) for manifest storage. During implementation we discovered that the Galileo testnet KV stream contract enforces strict `SenderNoWritePermission` — writes are only accepted from the stream owner's wallet, and stream ownership propagation to indexer nodes has multi-hour latency on testnet. This made KV writes non-deterministic for a hackathon demo context.
+
+**Engineering decision:** We pivoted to **0G File Storage** via `Indexer.upload()`, which:
+- Is fully open — any wallet can upload, any client can read by root hash
+- Returns a deterministic Merkle root hash that serves as a content ID
+- Is read via the Indexer REST gateway (`GET /file?root=<hash>`) — stateless and reliable
+- Is functionally equivalent to KV for our use case: write-once, read-many manifests
+
+The `logViolation()` function also uses File Storage — each violation is a separate immutable file, making the audit trail append-only by construction (no delete API exists on 0G File Storage).
 
 ---
 
@@ -298,6 +315,96 @@ npx ts-node packages/contracts/src/ENSRegistrar.ts revoke --skill rogue-skill
 | `ETH_SEPOLIA_RPC` | ✅ | Sepolia RPC for ENS |
 | `ZG_KV_NODE_RPC` | ⬜ | KV node hint (auto-discovered if absent) |
 | `ZG_STREAM_ID` | ⬜ | ClawGuard KV stream ID (has default) |
+
+---
+
+## Pre-Demo Checklist
+
+Run this before every demo or judge evaluation:
+
+```bash
+npm run preflight
+```
+
+Checks performed:
+- ✅ All required env vars set in `.env`
+- ✅ 0G Chain RPC reachable (chainId 16602)
+- ✅ 0G Storage Indexer REST responding
+- ✅ ENS resolution: `defi-reader.skills.clawhub.eth` → root hash
+- ✅ SkillRegistry contract callable (totalSkills)
+- ✅ Wallet balance ≥ 0.01 OG
+
+---
+
+## Architecture Diagram
+
+```mermaid
+graph TD
+    A["OpenClaw Agent\n(Layer 2)"] -->|tool_dispatch| B
+    B["ClawGuard Middleware\n(Layer 2.5)"]
+    B -->|"① resolve ENS"| C["ENS Sepolia\ndefi-reader.skills.clawhub.eth"]
+    C -->|storageKey hash| B
+    B -->|"② fetch manifest"| D["0G File Storage\n(Indexer REST)"]
+    D -->|CapabilityManifest JSON| B
+    B -->|"③ verify SHA-256"| B
+    B -->|"④ BLOCKED → log"| E["0G Storage Log\n(append-only audit trail)"]
+    B -->|"⑤ verify result"| F["SkillRegistry.sol\n(0G Chain)"
+    ]
+    B -->|"✅ ALLOWED"| G["Tool Layer\n(Layer 3)"]
+    style B fill:#1a1a2e,color:#00d4ff,stroke:#00d4ff
+    style E fill:#2d1b1b,color:#ff6b6b,stroke:#ff6b6b
+    style F fill:#1b2d1b,color:#6bff6b,stroke:#6bff6b
+```
+
+---
+
+## Live Demo Outputs
+
+### `clawguard publish` (0G Storage + ENS + On-Chain)
+```
+🚀 ClawGuard — Publishing Skill
+
+[Publish] Skill: defi-reader
+[Publish] Manifest hash: 3f529942cf873214c8d53644c98a2f1300f04f790c4154cc0cbdda9090f65f70
+[0G Storage] Manifest uploaded.
+  Root: 0xdd242aedb2f82ee89fb4c2944781930c1a6b5d67869016d4c498a694a7af85f0
+  Tx  : 0x612b6cd633e195f988cc685f6be43649be29859b5f47ae6a0e1f783a268079d1
+[0G Chain] SkillRegistry: Skill already registered on-chain.
+[ENS] Set clawguard.storageKey | tx: 0x0d5fb22758ec920ffc6a2763dc6599260a9376187924619fdf44e039d461f1ac
+[ENS] Set clawguard.manifestHash | tx: 0xe6ef57955926a61fc8948fff5a16f93f8f18a3c1aca34940b7ef6a988d067a09
+[ENS] ✅ defi-reader.skills.clawhub.eth registered
+✅ Publish complete:
+   0G Storage key: 0xdd242aedb2f82ee89fb4c2944781930c1a6b5d67869016d4c498a694a7af85f0
+   Storage tx    : 0x612b6cd633e195f988cc685f6be43649be29859b5f47ae6a0e1f783a268079d1
+```
+
+### `clawguard inspect defi-reader --check-tool wallet.transfer`
+```
+🔎 ClawGuard — Inspecting Skill: defi-reader
+  ENS Name  : defi-reader.skills.clawhub.eth     ← ACTIVE
+  Registry  : 0x2205AC38725F42d9da0ffaDD94166B5E5b83010A
+  Fetching manifest from 0G Storage...
+  Allowed   : web.fetch, wallet.read_balance
+  Blocked   : wallet.transfer, wallet.approve, shell.exec
+  Delegation Gate — tool: "wallet.transfer"
+  ⛔ DENIED: "wallet.transfer" is explicitly blocked for "defi-reader"
+```
+
+### Violation auto-uploaded to 0G Storage Log
+```
+[ClawGuard] BLOCKED: "wallet.transfer" is in the blocked_tools list
+[0G Audit] ✅ Violation uploaded to 0G Storage Log
+[0G Audit]    Skill    : rogue-defi-skill | Tool: wallet.transfer
+[0G Audit]    Root hash: 0x<computed at runtime>
+[0G Audit]    View     : https://storagescan-galileo.0g.ai/tx/<hash>
+```
+
+### On-Chain Verification Badge (after `clawguard verify`)
+```
+🏅 Badge anchored on 0G Chain: VERIFIED
+   Tx hash : 0x<computed at runtime>
+   Explorer: https://chainscan-galileo.0g.ai/tx/<hash>
+```
 
 ---
 
