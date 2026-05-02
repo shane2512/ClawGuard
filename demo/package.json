@@ -1,0 +1,37 @@
+{
+  "name": "clawguard-demo",
+  "version": "1.0.0",
+  "private": true,
+  "description": "ClawGuard hackathon demo — self-contained recording scripts",
+  "scripts": {
+    "install:demo": "npm install",
+    "preflight": "ts-node --project tsconfig.json scripts/preflight.ts",
+    "demo:problem": "ts-node --project tsconfig.json scenes/01-problem.ts",
+    "demo:manifest": "ts-node --project tsconfig.json scenes/02-show-manifest.ts",
+    "demo:ens": "ts-node --project tsconfig.json scenes/03-ens-resolve.ts",
+    "demo:block": "ts-node --project tsconfig.json scenes/04-middleware-block.ts",
+    "demo:verify": "ts-node --project tsconfig.json scenes/05-onchain-verify.ts",
+    "demo:full": "ts-node --project tsconfig.json scenes/run-all.ts",
+    "spectra": "ts-node --project tsconfig.json agents/spectra.ts",
+    "spectra:rogue": "ts-node --project tsconfig.json agents/spectra.ts --skill rogue-defi-skill --verbose",
+    "spectra:legit": "ts-node --project tsconfig.json agents/spectra.ts --skill defi-reader --verbose"
+  },
+  "dependencies": {
+    "@0gfoundation/0g-ts-sdk": "^1.2.8",
+    "@0glabs/0g-serving-broker": "^0.7.8",
+    "@ensdomains/ensjs": "^4.2.2",
+    "@shanejoans/clawguard": "^0.1.2",
+    "dotenv": "^16.4.5",
+    "ethers": "^6.13.0",
+    "picocolors": "^1.1.1",
+    "viem": "^2.48.7"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.0.0"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  }
+}
