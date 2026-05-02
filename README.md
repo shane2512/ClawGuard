@@ -9,6 +9,8 @@
 [![ENS](https://img.shields.io/badge/ENS-clawhub.eth-purple)](https://app.ens.domains/clawhub.eth)
 [![Tests](https://img.shields.io/badge/Tests-39%20passed-brightgreen)](#testing)
 
+> [!NOTE]
+> 🎬 **Hackathon Demo:** Check out the [Spectra Agent Demo Suite](./demo) to see ClawGuard in action, complete with an end-to-end OpenClaw agent execution loop, 0G Storage Log uploads, and live attack interception.
 
 ---
 
@@ -338,23 +340,7 @@ Checks performed:
 
 ## Architecture Diagram
 
-```mermaid
-graph TD
-    A["OpenClaw Agent\n(Layer 2)"] -->|tool_dispatch| B
-    B["ClawGuard Middleware\n(Layer 2.5)"]
-    B -->|"① resolve ENS"| C["ENS Sepolia\ndefi-reader.skills.clawhub.eth"]
-    C -->|storageKey hash| B
-    B -->|"② fetch manifest"| D["0G File Storage\n(Indexer REST)"]
-    D -->|CapabilityManifest JSON| B
-    B -->|"③ verify SHA-256"| B
-    B -->|"④ BLOCKED → log"| E["0G Storage Log\n(append-only audit trail)"]
-    B -->|"⑤ verify result"| F["SkillRegistry.sol\n(0G Chain)"
-    ]
-    B -->|"✅ ALLOWED"| G["Tool Layer\n(Layer 3)"]
-    style B fill:#1a1a2e,color:#00d4ff,stroke:#00d4ff
-    style E fill:#2d1b1b,color:#ff6b6b,stroke:#ff6b6b
-    style F fill:#1b2d1b,color:#6bff6b,stroke:#6bff6b
-```
+![ClawGuard Architecture Diagram](./frontend/assets/architecture.png)
 
 ---
 
