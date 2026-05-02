@@ -67,7 +67,7 @@ async function main() {
     ok('ENS text records resolved.');
     info('Storage Key', storageKey.slice(0, 20) + '...' + storageKey.slice(-8));
     if (manifestHash) info('Manifest Hash', manifestHash.slice(0, 18) + '...');
-    info('ENS Explorer', `https://app.ens.domains/${ensName}`);
+    info('ENS Explorer', `https://sepolia.app.ens.domains/${ensName}`);
   } catch (err) {
     console.error(pc.red(`\n  [FAIL] ENS resolution failed: ${String(err)}\n`));
     process.exit(1);
@@ -118,7 +118,7 @@ async function main() {
     try {
       const actualHash = crypto
         .createHash('sha256')
-        .update(JSON.stringify(manifest))
+        .update(manifestRaw.trim())
         .digest('hex');
       const normalizedExpected = manifestHash.replace(/^0x/, '');
 

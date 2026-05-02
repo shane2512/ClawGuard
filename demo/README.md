@@ -188,7 +188,7 @@ Runs all scenes back-to-back with separators. Use this if you want a single cont
 | 5 — Verify | CAPABILITY_MISMATCH + 0G Chain tx hash | 0G Compute + SkillRegistry on-chain badge |
 
 ### Key URLs to show during recording:
-- ENS: https://app.ens.domains/defi-reader.skills.clawhub.eth
+- ENS: https://sepolia.app.ens.domains/defi-reader.skills.clawhub.eth
 - StorageScan (manifest): https://storagescan-galileo.0g.ai/tx/0xdd242aedb2f82ee89fb4c2944781930c1a6b5d67869016d4c498a694a7af85f0
 - SkillRegistry: https://chainscan-galileo.0g.ai/address/0x2205AC38725F42d9da0ffaDD94166B5E5b83010A
 - npm SDK: https://www.npmjs.com/package/@shanejoans/clawguard
