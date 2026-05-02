@@ -1,0 +1,255 @@
+"use strict";
+var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    var desc = Object.getOwnPropertyDescriptor(m, k);
+    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
+      desc = { enumerable: true, get: function() { return m[k]; } };
+    }
+    Object.defineProperty(o, k2, desc);
+}) : (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    o[k2] = m[k];
+}));
+var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
+    Object.defineProperty(o, "default", { enumerable: true, value: v });
+}) : function(o, v) {
+    o["default"] = v;
+});
+var __importStar = (this && this.__importStar) || (function () {
+    var ownKeys = function(o) {
+        ownKeys = Object.getOwnPropertyNames || function (o) {
+            var ar = [];
+            for (var k in o) if (Object.prototype.hasOwnProperty.call(o, k)) ar[ar.length] = k;
+            return ar;
+        };
+        return ownKeys(o);
+    };
+    return function (mod) {
+        if (mod && mod.__esModule) return mod;
+        var result = {};
+        if (mod != null) for (var k = ownKeys(mod), i = 0; i < k.length; i++) if (k[i] !== "default") __createBinding(result, mod, k[i]);
+        __setModuleDefault(result, mod);
+        return result;
+    };
+})();
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.wrapWithClawGuard = wrapWithClawGuard;
+exports.addViolationHandler = addViolationHandler;
+const types_1 = require("./types");
+const cache_1 = require("./cache");
+// ─────────────────────────────────────────────────────────────────────────────
+// Main export
+// ─────────────────────────────────────────────────────────────────────────────
+/**
+ * Wraps OpenClaw's `tool_dispatch` with ClawGuard capability enforcement.
+ *
+ * This is the ONLY integration point — replace `agent.tool_dispatch` with
+ * the returned function. The agent needs no other changes (NFR-08: 3 lines max).
+ *
+ * Enforcement flow per tool call:
+ *  1. Fetch manifest from cache or local store (Phase 1) / 0G KV (Phase 2)
+ *  2. Check session call limit (max_external_calls_per_session)
+ *  3. Check `blocked_tools` list
+ *  4. Check `allowed_tools` list
+ *  5. Forward to original dispatch if all checks pass
+ *
+ * On any fetch failure → fail-closed by default (Rule A-02).
+ *
+ * @param originalDispatch - The original OpenClaw tool_dispatch function
+ * @param config           - ClawGuard configuration (agentId is required)
+ * @returns A new function with the same signature as tool_dispatch
+ *
+ * @example
+ * ```typescript
+ * import { wrapWithClawGuard } from '@clawguard/core';
+ * agent.tool_dispatch = wrapWithClawGuard(agent.tool_dispatch, {
+ *   agentId: 'defi-monitor-agent',
+ *   failOpen: false,
+ * });
+ * ```
+ */
+function wrapWithClawGuard(originalDispatch, config) {
+    const validatedConfig = types_1.ClawGuardConfigSchema.parse(config);
+    const state = {
+        config: validatedConfig,
+        cache: (0, cache_1.createManifestCache)(validatedConfig.cacheTtlMs),
+        sessionCallCounts: new Map(),
+        violationHandlers: [],
+    };
+    // Expose state for addViolationHandler() — stored on function object
+    const wrappedDispatch = async function clawGuardDispatch(toolName, params, context) {
+        // If no skill context provided, we cannot determine the caller — fail-closed
+        if (!context?.skillId) {
+            const errorMsg = `[ClawGuard] BLOCKED: no skill context provided for tool "${toolName}". ` +
+                `Ensure your OpenClaw agent passes skillId in the tool call context.`;
+            console.error(errorMsg);
+            return buildBlockedError('unknown', toolName, 'MANIFEST_NOT_FOUND', errorMsg);
+        }
+        const { skillId, sessionId = 'default-session' } = context;
+        // ── Step 1: Fetch manifest (cache-first) ──────────────────────────────
+        let manifest;
+        try {
+            manifest = await fetchManifest(skillId, state);
+        }
+        catch (err) {
+            const reason = 'FETCH_ERROR';
+            const event = buildViolationEvent(skillId, toolName, validatedConfig.agentId, sessionId, reason);
+            await emitViolation(event, state);
+            if (validatedConfig.failOpen) {
+                console.warn(`[ClawGuard] WARN: manifest fetch failed for "${skillId}", failing OPEN (dev mode)`);
+                return originalDispatch(toolName, params, context);
+            }
+            const msg = `[ClawGuard] BLOCKED: cannot fetch manifest for skill "${skillId}": ${String(err)}`;
+            console.error(msg);
+            return buildBlockedError(skillId, toolName, reason, msg);
+        }
+        // ── Step 2: Session call limit ─────────────────────────────────────────
+        const sessionKey = `${sessionId}:${skillId}`;
+        const callCount = (state.sessionCallCounts.get(sessionKey) ?? 0) + 1;
+        state.sessionCallCounts.set(sessionKey, callCount);
+        if (callCount > manifest.maxExternalCallsPerSession) {
+            const reason = 'SESSION_LIMIT_EXCEEDED';
+            const event = buildViolationEvent(skillId, toolName, validatedConfig.agentId, sessionId, reason);
+            await emitViolation(event, state);
+            const msg = `[ClawGuard] BLOCKED: skill "${skillId}" exceeded ` +
+                `max_external_calls_per_session (${manifest.maxExternalCallsPerSession})`;
+            console.error(msg);
+            return buildBlockedError(skillId, toolName, reason, msg);
+        }
+        // ── Step 3: Explicit blocked_tools check ──────────────────────────────
+        if (manifest.blockedTools.includes(toolName)) {
+            const reason = 'IN_BLOCKED_TOOLS';
+            const event = buildViolationEvent(skillId, toolName, validatedConfig.agentId, sessionId, reason);
+            await emitViolation(event, state);
+            const msg = `[ClawGuard] BLOCKED: "${toolName}" is in the blocked_tools list for skill "${skillId}"`;
+            console.error(msg);
+            return buildBlockedError(skillId, toolName, reason, msg);
+        }
+        // ── Step 4: allowed_tools membership check ────────────────────────────
+        if (!manifest.allowedTools.includes(toolName)) {
+            const reason = 'NOT_IN_ALLOWED_TOOLS';
+            const event = buildViolationEvent(skillId, toolName, validatedConfig.agentId, sessionId, reason);
+            await emitViolation(event, state);
+            const msg = `[ClawGuard] BLOCKED: "${toolName}" not in declared capabilities for skill "${skillId}"`;
+            console.error(msg);
+            return buildBlockedError(skillId, toolName, reason, msg);
+        }
+        // ── Step 5: Allowed — forward to original dispatch ────────────────────
+        if (process.env['NODE_ENV'] !== 'test') {
+            console.log(`[ClawGuard] ALLOWED: "${toolName}" → skill "${skillId}"`);
+        }
+        return originalDispatch(toolName, params, context);
+    };
+    wrappedDispatch.__cgState = state;
+    // Auto-wire 0G Storage Log audit handler when auditLog: true
+    if (validatedConfig.auditLog) {
+        // eslint-disable-next-line @typescript-eslint/no-var-requires
+        const { createViolationAuditHandler } = require('./storage');
+        const storageConfig = validatedConfig.zgStorageRpc ? {
+            rpcUrl: validatedConfig.zgStorageRpc,
+            indexerRpc: validatedConfig.zgIndexerRpc ?? validatedConfig.zgStorageRpc,
+            privateKey: validatedConfig.zgPrivateKey ?? '',
+        } : undefined;
+        state.violationHandlers.push(createViolationAuditHandler(storageConfig));
+        console.log('[ClawGuard] 0G Storage Log audit trail: ENABLED');
+    }
+    return wrappedDispatch;
+}
+/**
+ * Registers a violation event handler on a ClawGuard-wrapped dispatch function.
+ * Use this in Phase 2 to pipe events to 0G Storage Log.
+ *
+ * @param wrappedDispatch - The function returned by wrapWithClawGuard()
+ * @param handler         - Called with each ViolationEvent before it is logged
+ */
+function addViolationHandler(wrappedDispatch, handler) {
+    const state = wrappedDispatch.__cgState;
+    if (!state) {
+        throw new Error('addViolationHandler: provided function is not a ClawGuard-wrapped dispatch. ' +
+            'Call wrapWithClawGuard() first.');
+    }
+    state.violationHandlers.push(handler);
+}
+// ─────────────────────────────────────────────────────────────────────────────
+// Internal helpers
+// ─────────────────────────────────────────────────────────────────────────────
+/**
+ * Fetches a manifest for the given skillId.
+ * Priority: in-memory cache → local store (Phase 1) → 0G Storage KV (Phase 2)
+ */
+async function fetchManifest(skillId, state) {
+    // 1. In-memory cache hit
+    const cached = state.cache.get(skillId);
+    if (cached)
+        return cached;
+    // 2. Local manifest store (Phase 1 — no blockchain needed)
+    if (state.config.localManifestStore) {
+        const local = state.config.localManifestStore[skillId];
+        if (local) {
+            const manifest = local;
+            state.cache.set(skillId, manifest);
+            return manifest;
+        }
+    }
+    // 3. 0G Storage fetch (Phase 2) — rootHash must be in config or resolved via ENS
+    if (state.config.zgStorageRpc && state.config.zgManifestRootHash) {
+        const { ZGStorageClient } = await Promise.resolve().then(() => __importStar(require('./storage')));
+        const storageClient = new ZGStorageClient({
+            rpcUrl: state.config.zgStorageRpc,
+            indexerRpc: state.config.zgIndexerRpc ?? state.config.zgStorageRpc,
+            privateKey: state.config.zgPrivateKey ?? '',
+        });
+        const manifest = await storageClient.fetchManifest(state.config.zgManifestRootHash);
+        state.cache.set(skillId, manifest);
+        return manifest;
+    }
+    // 4. ENS auto-resolution — resolve ensName → storageKey → 0G Storage fetch
+    if (state.config.ensName) {
+        const { getSkillStorageKey } = await Promise.resolve().then(() => __importStar(require('./ens')));
+        const rootHash = await getSkillStorageKey(state.config.ensName);
+        if (!rootHash) {
+            throw new Error(`ENS auto-resolution: no storageKey found for "${state.config.ensName}".\n` +
+                `  Ensure the skill has been published: clawguard publish <skill-dir>`);
+        }
+        const { ZGStorageClient } = await Promise.resolve().then(() => __importStar(require('./storage')));
+        const storageClient2 = new ZGStorageClient({
+            rpcUrl: state.config.zgStorageRpc ?? process.env['ZG_CHAIN_RPC'] ?? '',
+            indexerRpc: state.config.zgIndexerRpc ?? process.env['ZG_INDEXER_RPC'] ?? '',
+            privateKey: state.config.zgPrivateKey ?? process.env['ZG_PRIVATE_KEY'] ?? '',
+        });
+        console.log(`[ClawGuard] ENS resolved "${state.config.ensName}" → ${rootHash}`);
+        const manifest2 = await storageClient2.fetchManifest(rootHash);
+        state.cache.set(skillId, manifest2);
+        return manifest2;
+    }
+    throw new Error(`No manifest found for skill "${skillId}". ` +
+        `Provide localManifestStore in ClawGuardConfig for Phase 1 testing, ` +
+        `or configure zgStorageRpc for Phase 2.`);
+}
+/** Constructs a ViolationEvent — only safe fields, no wallet/key data (Rule S-02) */
+function buildViolationEvent(skillId, blockedTool, agentId, sessionId, reason) {
+    return {
+        skillId,
+        blockedTool,
+        agentId,
+        timestamp: Date.now(),
+        sessionId,
+        reason,
+    };
+}
+/** Runs all registered violation handlers, swallowing individual handler errors */
+async function emitViolation(event, state) {
+    for (const handler of state.violationHandlers) {
+        try {
+            await handler(event);
+        }
+        catch (err) {
+            console.error(`[ClawGuard] Violation handler threw an error:`, err);
+        }
+    }
+}
+/** Constructs a structured BlockedCallError that the agent can handle gracefully (FR-14) */
+function buildBlockedError(skillId, toolName, reason, message) {
+    return { blocked: true, skillId, toolName, reason, message };
+}
+//# sourceMappingURL=middleware.js.map
