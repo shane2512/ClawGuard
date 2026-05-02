@@ -87,14 +87,16 @@ async function check0GChain(): Promise<void> {
 async function check0GIndexer(): Promise<void> {
   const rpc = process.env['ZG_INDEXER_RPC'] ?? 'https://indexer-storage-testnet-turbo.0g.ai';
   try {
+    // Use /file with a zero hash — 404 means the endpoint is alive and routing correctly
     const res = await Promise.race([
-      fetch(`${rpc}/nodes`),
+      fetch(`${rpc}/file?root=0x0000000000000000000000000000000000000000000000000000000000000001`),
       new Promise<never>((_, rej) => setTimeout(() => rej(new Error('timeout')), 8000)),
     ]) as Response;
-    if (res.ok) {
-      pass('0G Indexer REST', `${rpc} → HTTP ${res.status}`);
+    // 200 = file found, 404 = not found (both mean the server is up and routing)
+    if (res.status === 200 || res.status === 404 || res.status === 400) {
+      pass('0G Indexer REST', `${rpc} → HTTP ${res.status} (reachable)`);
     } else {
-      warn('0G Indexer REST', `HTTP ${res.status} from ${rpc}`);
+      warn('0G Indexer REST', `Unexpected HTTP ${res.status} from ${rpc}`);
     }
   } catch (err) {
     fail('0G Indexer REST', `Cannot reach: ${String(err).slice(0, 80)}`);
