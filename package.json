@@ -4,7 +4,8 @@
   "private": true,
   "description": "Declarative capability enforcement framework for OpenClaw — OAuth-style, on-chain enforced permission middleware.",
   "workspaces": [
-    "packages/*"
+    "packages/*",
+    "frontend"
   ],
   "scripts": {
     "build": "npm run build --workspaces --if-present",
