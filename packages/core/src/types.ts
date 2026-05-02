@@ -103,6 +103,18 @@ export const ClawGuardConfigSchema = z.object({
    * After TTL expires, manifest will be re-fetched from 0G Storage.
    */
   cacheTtlMs: z.number().positive().default(60_000),
+  /**
+   * When true, automatically uploads every ViolationEvent to 0G Storage Log
+   * as a tamper-proof, append-only audit trail entry.
+   * Requires zgStorageRpc, zgIndexerRpc, zgPrivateKey (or ZG_* env vars).
+   */
+  auditLog: z.boolean().default(false),
+  /**
+   * ENS skill name (e.g. "defi-reader.skills.clawhub.eth").
+   * When set and zgManifestRootHash is absent, the middleware auto-resolves
+   * ENS → storageKey on the first cache miss (no hardcoded hash needed).
+   */
+  ensName: z.string().optional(),
 });
 
 export type ClawGuardConfig = z.infer<typeof ClawGuardConfigSchema>;

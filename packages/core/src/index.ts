@@ -30,7 +30,7 @@ export { createManifestCache } from './cache';
 
 // Storage (Phase 2)
 export type { ZGStorageConfig } from './storage';
-export { ZGStorageClient, createStorageClientFromEnv } from './storage';
+export { ZGStorageClient, createStorageClientFromEnv, createViolationAuditHandler } from './storage';
 
 // Middleware
 export type { ToolDispatchFn, SkillContext, ViolationHandler } from './middleware';

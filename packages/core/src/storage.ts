@@ -244,3 +244,48 @@ export function createStorageClientFromEnv(): ZGStorageClient {
     flowContractAddress: process.env['ZG_FLOW_CONTRACT'],
   });
 }
+
+// ─── Violation Audit Handler factory ─────────────────────────────────────────
+
+/**
+ * Creates a ViolationHandler that uploads every blocked tool call event to
+ * 0G Storage Log as a tamper-proof, append-only audit entry.
+ *
+ * Designed to be passed directly to addViolationHandler(), or wired
+ * automatically via the `auditLog: true` option in ClawGuardConfig.
+ *
+ * @param config - Optional ZGStorageConfig; falls back to ZG_* env vars
+ * @returns An async handler that logs violations to 0G Storage on each call
+ *
+ * @example
+ * ```typescript
+ * import { createViolationAuditHandler, addViolationHandler } from '@shanejoans/clawguard';
+ * addViolationHandler(dispatch, createViolationAuditHandler());
+ * ```
+ */
+export function createViolationAuditHandler(
+  config?: ZGStorageConfig,
+): (event: ViolationEvent) => Promise<void> {
+  // Lazily instantiated — avoids env-var errors at module load time
+  let client: ZGStorageClient | null = null;
+
+  return async (event: ViolationEvent): Promise<void> => {
+    try {
+      if (!client) {
+        client = config ? new ZGStorageClient(config) : createStorageClientFromEnv();
+      }
+      const rootHash = await client.logViolation(event);
+      console.log(`[0G Audit] ✅ Violation uploaded to 0G Storage Log`);
+      console.log(`[0G Audit]    Skill    : ${event.skillId} | Tool: ${event.blockedTool}`);
+      console.log(`[0G Audit]    Root hash: ${rootHash}`);
+      console.log(`[0G Audit]    View     : https://storagescan-galileo.0g.ai/tx/${rootHash}`);
+    } catch (err) {
+      // Non-fatal — enforcement must never crash because audit logging failed
+      console.error(
+        `[0G Audit] ⚠️  Violation log upload failed (non-fatal): ` +
+        String(err).slice(0, 120),
+      );
+    }
+  };
+}
+

@@ -106,7 +106,12 @@ async function main(): Promise<void> {
       ),
     );
   }
-  console.log(c.dim('\n  (In Phase 2, this violation is appended to 0G Storage Log — tamper-proof on-chain)\n'));
+  const auditActive = !!(process.env['ZG_CHAIN_RPC'] && process.env['ZG_INDEXER_RPC'] && process.env['ZG_PRIVATE_KEY']);
+  if (auditActive) {
+    console.log(c.cyan('  [0G Audit] ↑ Violation automatically uploaded to 0G Storage Log (see root hash above) ↑\n'));
+  } else {
+    console.log(c.dim('  Set ZG_CHAIN_RPC, ZG_INDEXER_RPC, ZG_PRIVATE_KEY in .env to enable live 0G audit logging.\n'));
+  }
 
   await sleep(1000);
 

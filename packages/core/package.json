@@ -1,6 +1,6 @@
 {
   "name": "@shanejoans/clawguard",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "ClawGuard — OAuth-style capability enforcement middleware for AI agents on 0G Chain",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",

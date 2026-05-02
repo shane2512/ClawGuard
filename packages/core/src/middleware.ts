@@ -191,6 +191,20 @@ export function wrapWithClawGuard(
     };
 
   wrappedDispatch.__cgState = state;
+
+  // Auto-wire 0G Storage Log audit handler when auditLog: true
+  if (validatedConfig.auditLog) {
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const { createViolationAuditHandler } = require('./storage') as typeof import('./storage');
+    const storageConfig = validatedConfig.zgStorageRpc ? {
+      rpcUrl: validatedConfig.zgStorageRpc,
+      indexerRpc: validatedConfig.zgIndexerRpc ?? validatedConfig.zgStorageRpc,
+      privateKey: validatedConfig.zgPrivateKey ?? '',
+    } : undefined;
+    state.violationHandlers.push(createViolationAuditHandler(storageConfig));
+    console.log('[ClawGuard] 0G Storage Log audit trail: ENABLED');
+  }
+
   return wrappedDispatch;
 }
 
@@ -252,6 +266,28 @@ async function fetchManifest(
     const manifest = await storageClient.fetchManifest(state.config.zgManifestRootHash);
     state.cache.set(skillId, manifest);
     return manifest;
+  }
+
+  // 4. ENS auto-resolution — resolve ensName → storageKey → 0G Storage fetch
+  if (state.config.ensName) {
+    const { getSkillStorageKey } = await import('./ens');
+    const rootHash = await getSkillStorageKey(state.config.ensName);
+    if (!rootHash) {
+      throw new Error(
+        `ENS auto-resolution: no storageKey found for "${state.config.ensName}".\n` +
+        `  Ensure the skill has been published: clawguard publish <skill-dir>`,
+      );
+    }
+    const { ZGStorageClient } = await import('./storage');
+    const storageClient2 = new ZGStorageClient({
+      rpcUrl: state.config.zgStorageRpc ?? process.env['ZG_CHAIN_RPC'] ?? '',
+      indexerRpc: state.config.zgIndexerRpc ?? process.env['ZG_INDEXER_RPC'] ?? '',
+      privateKey: state.config.zgPrivateKey ?? process.env['ZG_PRIVATE_KEY'] ?? '',
+    });
+    console.log(`[ClawGuard] ENS resolved "${state.config.ensName}" → ${rootHash}`);
+    const manifest2 = await storageClient2.fetchManifest(rootHash);
+    state.cache.set(skillId, manifest2);
+    return manifest2;
   }
 
   throw new Error(

@@ -28,14 +28,26 @@ export class DeFiMonitorAgent {
         agentId: this.agentId,
         failOpen: false, // fail-closed (Rule A-02)
         localManifestStore,
+        // Phase 2: auto-upload violations to 0G Storage Log (FIX 1)
+        auditLog: !!(
+          process.env['ZG_CHAIN_RPC'] &&
+          process.env['ZG_INDEXER_RPC'] &&
+          process.env['ZG_PRIVATE_KEY']
+        ),
+        zgStorageRpc:  process.env['ZG_CHAIN_RPC'],
+        zgIndexerRpc:  process.env['ZG_INDEXER_RPC'],
+        zgPrivateKey:  process.env['ZG_PRIVATE_KEY'],
+        // Phase 3: ENS auto-resolution demo — middleware resolves ENS on cache miss (FIX 4)
+        // ensName: 'defi-reader.skills.clawhub.eth',
       },
     );
 
-    // Register violation handler (Phase 2: this will be 0G Storage Log)
+    // In-memory capture for demo display (separate from 0G audit log)
     addViolationHandler(this.dispatch, (event) => {
       this.violations.push(event);
     });
   }
+
 
   /**
    * Reads all skill directories and parses their SKILL.md into manifests.

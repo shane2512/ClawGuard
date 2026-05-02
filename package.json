@@ -11,7 +11,9 @@
     "test": "npm run test --workspaces --if-present",
     "test:core": "npm run test --workspace=packages/core",
     "lint": "npm run lint --workspaces --if-present",
-    "clean": "npm run clean --workspaces --if-present"
+    "clean": "npm run clean --workspaces --if-present",
+    "preflight": "ts-node -r tsconfig-paths/register --transpile-only scripts/preflight.ts",
+    "demo": "npm run dev --workspace=packages/example-agent"
   },
   "devDependencies": {
     "typescript": "^5.0.0"

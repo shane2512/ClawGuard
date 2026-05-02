@@ -240,8 +240,9 @@ async function updateOnChainStatus(skillId: string, status: VerificationStatus):
     const skillIdBytes32 = ethers.keccak256(ethers.toUtf8Bytes(skillId));
     const tx = await registry.updateVerificationStatus(skillIdBytes32, statusMap[status]);
     await tx.wait();
-    console.log(c.cyan(`\n[0G Chain] Verification status updated on-chain: ${status}`));
-    console.log(c.dim(`  Tx: https://chainscan-galileo.0g.ai/tx/${tx.hash}`));
+    console.log(c.cyan(`\n🏅 Badge anchored on 0G Chain: ${status}`));
+    console.log(c.cyan(`   Tx hash : ${tx.hash}`));
+    console.log(c.dim(`   Explorer: https://chainscan-galileo.0g.ai/tx/${tx.hash}`));
   } catch (err) {
     console.warn(c.yellow(`\n⚠️  Could not update on-chain status: ${String(err)}`));
   }
