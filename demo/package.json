@@ -2,7 +2,7 @@
   "name": "clawguard-demo",
   "version": "1.0.0",
   "private": true,
-  "description": "ClawGuard hackathon demo — self-contained recording scripts",
+  "description": "Spectra OpenClaw agent demo — end-to-end ClawGuard capability enforcement with 0G Storage, 0G Chain, and 0G Compute",
   "scripts": {
     "install:demo": "npm install",
     "preflight": "ts-node --project tsconfig.json scripts/preflight.ts",

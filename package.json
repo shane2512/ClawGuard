@@ -2,7 +2,7 @@
   "name": "clawguard",
   "version": "0.1.0",
   "private": true,
-  "description": "Declarative capability enforcement framework for OpenClaw — OAuth-style, on-chain enforced permission middleware.",
+  "description": "Layer 2.5 security middleware for OpenClaw agents — declarative capability enforcement with tamper-proof audit logs on 0G Storage, manifest registry on 0G Chain, and sealed verification via 0G Compute.",
   "workspaces": [
     "packages/*",
     "frontend"
