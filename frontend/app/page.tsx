@@ -354,7 +354,7 @@ export default function ClawGuardPage() {
             Secure your agents<br />with ClawGuard.
           </h2>
           <p className="text-sm text-white/50 leading-relaxed mb-10 font-mono">
-            Open source middleware built for the ETHGlobal OpenAgents Hackathon.
+            Open source middleware built on 0G infrastructure for agentic security.
           </p>
           <div className="flex justify-center gap-4">
             <a
@@ -405,7 +405,7 @@ export default function ClawGuardPage() {
           </div>
         </div>
         <div className="max-w-6xl mx-auto mt-8 pt-6 border-t border-white/[0.04]">
-          <span className="text-xs text-white/20 font-mono">© 2026 ClawGuard Contributors. ETHGlobal OpenAgents Hackathon.</span>
+          <span className="text-xs text-white/20 font-mono">© 2026 ClawGuard Contributors. Built on 0G.</span>
         </div>
       </footer>
     </div>
